@@ -116,3 +116,7 @@ temp/
 # ============================================================
 coverage/
 .nyc_output/
+
+.dev.vars*
+!.dev.vars.example
+!.env.example
