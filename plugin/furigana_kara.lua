@@ -1,10 +1,7 @@
 script_name = "YomiMark Furigana"
 script_description = "Add furigana to subtitles using YomiMark API"
 script_author = "YomiMark"
-script_version = "1.3.3"  -- 最终修正：只对需要注音的汉字生成注音，忽略其他字符
-
--- 注音定位算法参考了 domo 的 "One Click Ruby" 脚本
--- https://github.com/qwe7989199/RubyTools/blob/master/automation/autoload/OneClickRubyV2.lua
+script_version = "1.3.6"  -- 增强 Normal 模式匹配逻辑，优化 KTV 分隔符
 
 require "karaskel"
 local json = require("json")
@@ -29,22 +26,6 @@ local function table_copy(t)
     return r
 end
 
--- UTF-8 字符数计算
-local function utf8_len(str)
-    local len = 0
-    local i = 1
-    while i <= #str do
-        local c = str:byte(i)
-        if c >= 0xF0 then i = i + 4
-        elseif c >= 0xE0 then i = i + 3
-        elseif c >= 0xC0 then i = i + 2
-        else i = i + 1 end
-        len = len + 1
-    end
-    return len
-end
-
--- 将UTF-8字符串拆分为单个字符的表
 local function utf8_chars(str)
     local chars = {}
     local i = 1
@@ -60,12 +41,10 @@ local function utf8_chars(str)
     return chars
 end
 
--- 移除所有 ASS 覆盖标签 { ... }
 local function remove_ass_tags(str)
     return str:gsub("{[^}]*}", "")
 end
 
--- 提取文本中第一个 \pos 标签的值 (如果有)
 local function extract_pos(text)
     local x, y = text:match("\\pos%((%d+),(%d+)%)")
     if x and y then
@@ -115,57 +94,69 @@ local function call_api(api_url, text)
 end
 
 -- ============================================================
--- KTV converter (保持不变)
+-- KTV converter (符合用户规范：每个假名后用 #|< 分隔)
+-- 示例： "夜|<よ#|<る" "今|<き#|<ょ日|<う#|<は"
 -- ============================================================
-
 local function convert_to_ktv(api_result)
     local output = {}
     local pos = 1
+    
     while pos <= #api_result do
         local ruby_start = api_result:find("<ruby>", pos, true)
         if not ruby_start then
             output[#output+1] = api_result:sub(pos)
             break
         end
+        
         if ruby_start > pos then
             output[#output+1] = api_result:sub(pos, ruby_start-1)
         end
+        
         local ruby_end = api_result:find("</ruby>", ruby_start, true)
         if not ruby_end then
             output[#output+1] = api_result:sub(ruby_start)
             break
         end
+        
         local ruby_content = api_result:sub(ruby_start+6, ruby_end-1)
         local kanji = ruby_content:match("^(.-)<rp>")
         local furigana = ruby_content:match("<rt>(.-)</rt>")
+        
         if kanji and furigana then
             local kc = utf8_chars(kanji)
             local fc = utf8_chars(furigana)
+            
             if #kc == 1 then
-                output[#output+1] = kc[1] .. "|<"
-                for i,v in ipairs(fc) do
-                    output[#output+1] = v
-                    if i < #fc then output[#output+1] = "#|<" end
-                end
+                -- 单个汉字：将每个假名用 #|< 连接
+                local furi_str = table.concat(fc, "#|<")
+                output[#output+1] = kc[1] .. "|<" .. furi_str
             else
-                local fpi = math.ceil(#fc / #kc)
+                -- 多个汉字：将假名均匀分配到每个汉字上，每个假名后跟 #|<
+                local k_count = #kc
+                local f_count = #fc
+                local base = math.floor(f_count / k_count)
+                local remainder = f_count % k_count
                 local idx = 1
-                for i=1,#kc do
-                    output[#output+1] = kc[i] .. "|<"
-                    local c = 0
-                    while idx <= #fc and c < fpi do
-                        output[#output+1] = fc[idx]
-                        idx = idx + 1
-                        c = c + 1
-                        if c < fpi and idx <= #fc then output[#output+1] = "#|<" end
+                for i = 1, k_count do
+                    local take = base + (i <= remainder and 1 or 0)
+                    local furi_parts = {}
+                    for j = 1, take do
+                        if idx <= f_count then
+                            furi_parts[#furi_parts+1] = fc[idx]
+                            idx = idx + 1
+                        end
                     end
+                    local furi_str = table.concat(furi_parts, "#|<")
+                    output[#output+1] = kc[i] .. "|<" .. furi_str
                 end
             end
         else
             output[#output+1] = ruby_content
         end
+        
         pos = ruby_end + 7
     end
+    
     return table.concat(output)
 end
 
@@ -201,10 +192,11 @@ local function process(subtitles, selected_lines)
     local meta, styles = karaskel.collect_head(subtitles)
 
     if config.mode == "ktv" then
-        -- KTV 模式代码（原样，略）
         for _, i in ipairs(selected_lines) do
             local line = subtitles[i]
             local text = line.text
+
+            -- 分离 ASS 标签和纯文本
             local segments = {}
             local pos = 1
             while pos <= #text do
@@ -224,6 +216,7 @@ local function process(subtitles, selected_lines)
                 segments[#segments+1] = {type="tag", content=text:sub(s, e)}
                 pos = e+1
             end
+
             local final = ""
             for _, seg in ipairs(segments) do
                 if seg.type == "tag" then
@@ -237,6 +230,7 @@ local function process(subtitles, selected_lines)
                     end
                 end
             end
+
             line.text = final
             subtitles[i] = line
         end
@@ -245,7 +239,7 @@ local function process(subtitles, selected_lines)
     end
 
     -- =========================
-    -- NORMAL MODE (最终修正版)
+    -- NORMAL MODE (改进匹配逻辑)
     -- =========================
 
     local function parse_ruby_html(html)
@@ -306,30 +300,25 @@ local function process(subtitles, selected_lines)
         local original_line = subtitles[sel_i]
         local raw_text = original_line.text
 
-        -- 1. 提取原始行中的 \pos 坐标（如果有）
         local pos_x, pos_y = extract_pos(raw_text)
-
-        -- 2. 移除所有 ASS 标签，得到纯文本
         local plain_text = remove_ass_tags(raw_text)
         if plain_text == "" then
             aegisub.log("Line %d: empty text after removing tags, skipping.\n", sel_i)
             goto continue
         end
 
-        -- 3. 调用 API
         local api_result = call_api(config.api_url, plain_text)
         if not api_result then
             aegisub.log("Line %d: API failed, keeping original.\n", sel_i)
             goto continue
         end
 
-        -- 4. 解析 API 结果，得到最终文本和注音条目
         local parsed = parse_ruby_html(api_result)
-        local final_text = parsed.kanji_text      -- 包含所有字符（汉字+假名+标点）
+        local final_text = parsed.kanji_text
         local rubies = parsed.rubies
 
-        -- 5. 构建“需要注音的汉字”列表（每个元素包含该汉字及其对应的furigana）
-        local ruby_chars = {}   -- { {char="東", furigana="とう"}, {char="京", furigana="きょう"} }
+        -- 构建“需要注音的汉字”列表（保持顺序）
+        local ruby_chars = {}  -- 每个元素 {furigana}
         for _, ruby in ipairs(rubies) do
             local kanji_chars = utf8_chars(ruby.kanji)
             local furi_dist = distribute_furigana(ruby.kanji, ruby.furigana)
@@ -338,7 +327,7 @@ local function process(subtitles, selected_lines)
             end
         end
 
-        -- 6. 创建新的基础行（只包含最终文本，无注音标记，但保留 \pos）
+        -- 创建基础行（只包含最终文本，保留 \pos）
         local new_line = table_copy(original_line)
         local line_text = final_text
         if pos_x and pos_y then
@@ -348,9 +337,8 @@ local function process(subtitles, selected_lines)
         new_line.effect = "furi-fx"
         subtitles[sel_i] = new_line
 
-        -- 7. 获取每个字符的精确位置：为 final_text 的每个字符前添加 {\k0}
+        -- 获取每个字符的精确位置
         local vl = table_copy(new_line)
-        -- 临时移除 \pos 标签，因为我们要对纯文本加 {\k0}，之后再加上 \pos
         local pure_text = final_text
         vl.text = add_k0_before_text(pure_text)
         if pos_x and pos_y then
@@ -363,37 +351,31 @@ local function process(subtitles, selected_lines)
             goto continue
         end
 
-        -- vl.kara 的长度应该等于 final_text 的总字符数（包括所有字符）
         local all_chars = utf8_chars(final_text)
-        if #vl.kara ~= #all_chars then
-            aegisub.log("Warning: Line %d: character count mismatch (kara=%d, chars=%d)\n", sel_i, #vl.kara, #all_chars)
-        end
-
-        -- 8. 映射：找到每个需要注音的汉字在 all_chars 中的索引位置
-        -- 由于 final_text 可能包含非注音字符（如标点、假名），我们需要逐个字符扫描，匹配 ruby_chars 的顺序
         local ruby_index = 1
-        local stylefs = styles[original_line.style].fontsize
+        local style_obj = styles[original_line.style]
+        local stylefs = style_obj and style_obj.fontsize or 40  -- 默认字号
         local furi_fontsize = stylefs * rubyscale
 
+        -- 顺序匹配：遍历所有字符，按顺序匹配需要注音的汉字
         for char_pos = 1, #all_chars do
             if ruby_index > #ruby_chars then break end
             local current_char = all_chars[char_pos]
-            local target_ruby = ruby_chars[ruby_index]
-            if current_char == target_ruby.char then
-                -- 找到匹配的汉字，生成注音行
+            local target = ruby_chars[ruby_index]
+            if current_char == target.char then
                 local k = vl.kara[char_pos]
                 if k then
                     local rlx = vl.left + k.center
                     local rly = vl.top - (furi_fontsize / 2) - rubypadding
                     local furi_line = table_copy(new_line)
                     furi_line.text = string.format("{\\an5\\fs%d\\pos(%d,%d)}%s",
-                        furi_fontsize, rlx, rly, target_ruby.furigana)
+                        furi_fontsize, rlx, rly, target.furigana)
                     furi_line.effect = "furi-fx"
                     subtitles.append(furi_line)
                 end
                 ruby_index = ruby_index + 1
             end
-            -- 如果不是匹配的汉字，则跳过（不生成注音）
+            -- 如果不是需要注音的汉字，则跳过（不生成注音）
         end
 
         if ruby_index <= #ruby_chars then
