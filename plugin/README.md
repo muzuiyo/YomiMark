@@ -160,6 +160,8 @@ Dialogue: 0,0:00:25.41,0:00:30.41,Default,,0,0,0,,高速で過ぎ去った連続
 
 ### 示例 2：处理普通字幕
 
+使用前确保字幕样式已从样式库添加到当前字幕文件，否则会弹出警告 `WARNING: Style not found`。
+
 原始字幕：
 
 ![原始字幕截图](https://github.com/muzuiyo/YomiMark/blob/8a4a0b4f2919ba701fcefaa7c7dda06645ca24f1/docs/before.png)

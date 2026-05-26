@@ -11,7 +11,7 @@ local json = require("json")
 local request = require("luajit-request")
 
 -- Default settings
-local DEFAULT_API_URL = "http://127.0.0.1:8787"
+local DEFAULT_API_URL = "https://api.yomimark.lain.today"
 
 -- Furigana settings
 local rubyscale = 0.5
