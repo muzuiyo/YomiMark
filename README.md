@@ -315,29 +315,8 @@ npm run build     # 打包应用
 
 **A:** 目前 Kuroshiro 依赖在线加载的词典。可修改 `backend/src/index.ts` 中的 `DICT_CDN` 使用本地字典。
 
-## 许可证
-
-[请根据实际情况添加许可证信息]
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
 ## 相关资源
 
 - [Kuroshiro 文档](https://github.com/hexenq/kuroshiro)
 - [Cloudflare Workers 文档](https://developers.cloudflare.com/workers/)
 - [Aegisub 自动化脚本指南](http://docs.aegisub.org/latest/Automation/)
-
-## 更新日志
-
-### v1.1.0
-- 改进 Kuroshiro 初始化性能
-- 增强错误处理
-- 优化 CORS 支持
-
-### v1.0.0
-- 初始发布版本
-- 完整的注音功能
-- Web UI 和 API 服务
-- Aegisub 字幕插件支持
