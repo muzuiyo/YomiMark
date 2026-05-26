@@ -156,15 +156,15 @@ Dialogue: 0,0:00:25.41,0:00:30.41,Default,,0,0,0,,高速で過ぎ去った連続
 
 选中字幕行，设置样式为 KTV 样式（K1 或 K2）（该步骤可以使用 [Set Karaoke Style 自动化工具](https://github.com/MichiyamaKaren/aegisub-set-karaoke-style)），按照 KTV 模式分字，运行该自动化工具，再在注音符和后续文本之间进行分字，再运行“应用 KTV 模板”的自动化工具，即可生成按文字滚动的带注音 KTV 字幕。分字之间的 k 值可根据需要调整。
 
-<img width="1905" height="864" alt="Image" src="https://github-production-user-asset-6210df.s3.amazonaws.com/133942310/597985277-f0dd1b6f-4cf2-4883-895f-c1df378d62b2.gif" />
+![演示动画](https://github.com/muzuiyo/YomiMark/blob/8a4a0b4f2919ba701fcefaa7c7dda06645ca24f1/docs/screen.gif)
 
 ### 示例 2：处理普通字幕
 
 原始字幕：
 
-![原始字幕截图](https://github-production-user-asset-6210df.s3.amazonaws.com/133942310/598016661-de94c144-19cf-42a5-a54a-2e3f0946281d.png)
+![原始字幕截图](https://github.com/muzuiyo/YomiMark/blob/8a4a0b4f2919ba701fcefaa7c7dda06645ca24f1/docs/before.png)
 
 处理后的注音字幕：
 
-![注音字幕截图](https://github-production-user-asset-6210df.s3.amazonaws.com/133942310/598017146-34ffb6c3-767e-46f4-9b96-c0177a7f2aad.png)
+![注音字幕截图](https://github.com/muzuiyo/YomiMark/blob/8a4a0b4f2919ba701fcefaa7c7dda06645ca24f1/docs/after.png)
 
